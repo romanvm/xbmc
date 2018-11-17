@@ -27,7 +27,6 @@
 #include "input/ActionIDs.h"
 #include "messaging/ApplicationMessenger.h"
 #include "messaging/helpers/DialogOKHelper.h"
-#include "settings/Settings.h"
 #include "threads/SingleLock.h"
 #include "utils/log.h"
 #include "utils/StringUtils.h"
@@ -187,7 +186,8 @@ bool CGameClient::Initialize(void)
   if (!CDirectory::Exists(savestatesDir))
     CDirectory::Create(savestatesDir);
 
-  AddonProperties().InitializeProperties();
+  if (!AddonProperties().InitializeProperties())
+    return false;
 
   m_struct.toKodi.kodiInstance = this;
   m_struct.toKodi.CloseGame = cb_close_game;
@@ -313,7 +313,7 @@ bool CGameClient::InitializeGameplay(const std::string& gamePath, RETRO::IStream
 {
   if (LoadGameInfo())
   {
-    Input().Start();
+    Input().Start(input);
 
     m_bIsPlaying      = true;
     m_gamePath        = gamePath;

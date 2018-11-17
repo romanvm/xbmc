@@ -26,6 +26,7 @@
 #include "music/tags/MusicInfoTag.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/Settings.h"
+#include "settings/SettingsComponent.h"
 #include "utils/Digest.h"
 #include "utils/FileExtensionProvider.h"
 #include "utils/log.h"
@@ -120,12 +121,12 @@ void
 CUPnPServer::OnScanCompleted(int type)
 {
     if (type == AudioLibrary) {
-        for (size_t i = 0; i < ARRAY_SIZE(audio_containers); i++)
-            UpdateContainer(audio_containers[i]);
+        for (const char* const audio_container : audio_containers)
+            UpdateContainer(audio_container);
     }
     else if (type == VideoLibrary) {
-        for (size_t i = 0; i < ARRAY_SIZE(video_containers); i++)
-            UpdateContainer(video_containers[i]);
+        for (const char* const video_container : video_containers)
+            UpdateContainer(video_container);
     }
     else
         return;
@@ -158,7 +159,7 @@ CUPnPServer::PropagateUpdates()
     std::string buffer;
     std::map<std::string, std::pair<bool, unsigned long> >::iterator itr;
 
-    if (m_scanning || !CServiceBroker::GetSettings()->GetBool(CSettings::SETTING_SERVICES_UPNPANNOUNCE))
+    if (m_scanning || !CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_SERVICES_UPNPANNOUNCE))
         return;
 
     NPT_CHECK_LABEL(FindServiceById("urn:upnp-org:serviceId:ContentDirectory", service), failed);

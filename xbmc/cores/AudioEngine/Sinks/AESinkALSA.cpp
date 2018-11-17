@@ -15,6 +15,7 @@
 #include <algorithm>
 
 #include "AESinkALSA.h"
+#include "ServiceBroker.h"
 #include "cores/AudioEngine/AESinkFactory.h"
 #include "cores/AudioEngine/Utils/AEUtil.h"
 #include "cores/AudioEngine/Utils/AEELDParser.h"
@@ -23,6 +24,7 @@
 #include "utils/SystemInfo.h"
 #include "threads/SingleLock.h"
 #include "settings/AdvancedSettings.h"
+#include "settings/SettingsComponent.h"
 #if defined(HAS_LIBAMCODEC)
 #include "utils/AMLUtils.h"
 #endif
@@ -110,7 +112,7 @@ inline CAEChannelInfo CAESinkALSA::GetChannelLayoutRaw(const AEAudioFormat& form
 
   switch (format.m_streamInfo.m_type)
   {
-    case CAEStreamInfo::STREAM_TYPE_DTSHD:
+    case CAEStreamInfo::STREAM_TYPE_DTSHD_MA:
     case CAEStreamInfo::STREAM_TYPE_TRUEHD:
       count = 8;
       break;
@@ -120,6 +122,7 @@ inline CAEChannelInfo CAESinkALSA::GetChannelLayoutRaw(const AEAudioFormat& form
     case CAEStreamInfo::STREAM_TYPE_DTS_2048:
     case CAEStreamInfo::STREAM_TYPE_AC3:
     case CAEStreamInfo::STREAM_TYPE_EAC3:
+    case CAEStreamInfo::STREAM_TYPE_DTSHD:
       count = 2;
       break;
     default:
@@ -446,7 +449,7 @@ snd_pcm_chmap_t* CAESinkALSA::SelectALSAChannelMap(const CAEChannelInfo& info)
       chmap = CopyALSAchmap(&supportedMaps[best]->map);
   }
 
-  if (chmap && g_advancedSettings.CanLogComponent(LOGAUDIO))
+  if (chmap && CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->CanLogComponent(LOGAUDIO))
     CLog::Log(LOGDEBUG, "CAESinkALSA::SelectALSAChannelMap - Selected ALSA map \"%s\"", ALSAchmapToString(chmap).c_str());
 
   snd_pcm_free_chmaps(supportedMaps);
@@ -1521,6 +1524,7 @@ void CAESinkALSA::EnumerateDevice(AEDeviceInfoList &list, const std::string &dev
     // we don't trust ELD information and push back our supported formats explicitly
     info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_AC3);
     info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTSHD);
+    info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTSHD_MA);
     info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTSHD_CORE);
     info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTS_1024);
     info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTS_2048);
@@ -1592,7 +1596,7 @@ bool CAESinkALSA::GetELD(snd_hctl_t *hctl, int device, CAEDeviceInfo& info, bool
 
 void CAESinkALSA::sndLibErrorHandler(const char *file, int line, const char *function, int err, const char *fmt, ...)
 {
-  if(!g_advancedSettings.CanLogComponent(LOGAUDIO))
+  if(!CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->CanLogComponent(LOGAUDIO))
     return;
 
   va_list arg;

@@ -22,7 +22,10 @@ bool CWinSystemGbmEGLContext::InitWindowSystemEGL(EGLint renderableType, EGLint 
     return false;
   }
 
-  if (!m_eglContext.CreatePlatformDisplay(m_GBM->GetDevice(), m_GBM->GetDevice(), renderableType, apiType))
+  // we need to provide an alpha format to egl to workaround a mesa bug
+  int visualId = CDRMUtils::FourCCWithAlpha(CWinSystemGbm::GetDrm()->GetOverlayPlane()->format);
+
+  if (!m_eglContext.CreatePlatformDisplay(m_GBM->GetDevice(), m_GBM->GetDevice(), renderableType, apiType, visualId))
   {
     return false;
   }
@@ -51,7 +54,10 @@ bool CWinSystemGbmEGLContext::CreateNewWindow(const std::string& name,
     return false;
   }
 
-  if (!m_eglContext.CreatePlatformSurface(m_GBM->GetSurface(), m_GBM->GetSurface()))
+  // This check + the reinterpret cast is for security reason, if the user has outdated platform header files which often is the case
+  static_assert(sizeof(EGLNativeWindowType) == sizeof(gbm_surface*), "Declaration specifier differs in size");
+
+  if (!m_eglContext.CreatePlatformSurface(m_GBM->GetSurface(), reinterpret_cast<EGLNativeWindowType>(m_GBM->GetSurface())))
   {
     return false;
   }

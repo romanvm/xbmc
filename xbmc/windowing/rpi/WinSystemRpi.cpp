@@ -16,8 +16,9 @@
 #include "ServiceBroker.h"
 #include "windowing/GraphicContext.h"
 #include "windowing/Resolution.h"
-#include "settings/Settings.h"
 #include "settings/DisplaySettings.h"
+#include "settings/Settings.h"
+#include "settings/SettingsComponent.h"
 #include "guilib/DispResource.h"
 #include "utils/log.h"
 #include "cores/AudioEngine/AESinkFactory.h"
@@ -42,7 +43,21 @@ CWinSystemRpi::CWinSystemRpi() :
   m_rpi = new CRPIUtils();
 
   AE::CAESinkFactory::ClearSinks();
+
   CAESinkPi::Register();
+  std::string envSink;
+  if (getenv("KODI_AE_SINK"))
+    envSink = getenv("KODI_AE_SINK");
+
+  if (StringUtils::EqualsNoCase(envSink, "PULSE"))
+  {
+    OPTIONALS::PulseAudioRegister();
+  }
+  else
+  {
+    OPTIONALS::ALSARegister();
+  }
+
   CLinuxPowerSyscall::Register();
   m_lirc.reset(OPTIONALS::LircRegister());
   m_libinput->Start();
@@ -96,7 +111,7 @@ bool CWinSystemRpi::CreateNewWindow(const std::string& name,
     return true;
   }
 
-  int delay = CServiceBroker::GetSettings()->GetInt("videoscreen.delayrefreshchange");
+  int delay = CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt("videoscreen.delayrefreshchange");
   if (delay > 0)
   {
     m_delayDispReset = true;

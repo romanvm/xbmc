@@ -23,6 +23,7 @@
 #include "filesystem/File.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/Settings.h"
+#include "settings/SettingsComponent.h"
 #include "threads/SystemClock.h"
 #include "threads/SingleLock.h"
 #include "URL.h"
@@ -269,20 +270,25 @@ bool CDVDDemuxFFmpeg::Open(std::shared_ptr<CDVDInputStream> pInput, bool streami
   }
   else
   {
+    bool seekable = true;
+    if (m_pInput->Seek(0, SEEK_POSSIBLE) == 0)
+    {
+      seekable = false;
+    }
     int bufferSize = 4096;
     int blockSize = m_pInput->GetBlockSize();
-    if (blockSize > 1)
+
+    if (blockSize > 1 && seekable) // non seakable input streams are not supposed to set block size
       bufferSize = blockSize;
+
     unsigned char* buffer = (unsigned char*)av_malloc(bufferSize);
     m_ioContext = avio_alloc_context(buffer, bufferSize, 0, this, dvd_file_read, NULL, dvd_file_seek);
 
-    m_ioContext->max_packet_size = bufferSize;
+    if (blockSize > 1 && seekable)
+      m_ioContext->max_packet_size = bufferSize;
 
-    if (m_pInput->Seek(0, SEEK_POSSIBLE) == 0)
-    {
+    if (!seekable)
       m_ioContext->seekable = 0;
-      m_ioContext->max_packet_size = 0;
-    }
 
     std::string content = m_pInput->GetContent();
     StringUtils::ToLower(content);
@@ -313,11 +319,8 @@ bool CDVDDemuxFFmpeg::Open(std::shared_ptr<CDVDInputStream> pInput, bool streami
         pd.buf = probe_buffer.get();
         pd.filename = strFile.c_str();
 
-        // av_probe_input_buffer might have changed the buffer_size beyond our allocated amount
-        int buffer_size = std::min(probeBufferSize, m_ioContext->buffer_size);
-        buffer_size = m_ioContext->max_packet_size ? m_ioContext->max_packet_size : buffer_size;
         // read data using avformat's buffers
-        pd.buf_size = avio_read(m_ioContext, pd.buf, buffer_size);
+        pd.buf_size = avio_read(m_ioContext, pd.buf, probeBufferSize);
         if (pd.buf_size <= 0)
         {
           CLog::Log(LOGERROR, "%s - error reading from input stream, %s", __FUNCTION__, CURL::GetRedacted(strFile).c_str());
@@ -331,7 +334,7 @@ bool CDVDDemuxFFmpeg::Open(std::shared_ptr<CDVDInputStream> pInput, bool streami
         // the advancedsetting is for allowing the user to force outputting the
         // 44.1 kHz DTS wav file as PCM, so that an A/V receiver can decode
         // it (this is temporary until we handle 44.1 kHz passthrough properly)
-        if (trySPDIFonly || (iformat && strcmp(iformat->name, "wav") == 0 && !g_advancedSettings.m_VideoPlayerIgnoreDTSinWAV))
+        if (trySPDIFonly || (iformat && strcmp(iformat->name, "wav") == 0 && !CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_VideoPlayerIgnoreDTSinWAV))
         {
           // check for spdif and dts
           // This is used with wav files and audio CDs that may contain
@@ -425,7 +428,7 @@ bool CDVDDemuxFFmpeg::Open(std::shared_ptr<CDVDInputStream> pInput, bool streami
   }
 
   // Avoid detecting framerate if advancedsettings.xml says so
-  if (g_advancedSettings.m_videoFpsDetect == 0)
+  if (CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_videoFpsDetect == 0)
       m_pFormatContext->fps_probe_size = 0;
 
   // analyse very short to speed up mjpeg playback start
@@ -752,7 +755,7 @@ AVDictionary *CDVDDemuxFFmpeg::GetFFMpegOptionsFromInput()
     if (!hasUserAgent)
     {
       // set default xbmc user-agent.
-      av_dict_set(&options, "user_agent", g_advancedSettings.m_userAgent.c_str(), 0);
+      av_dict_set(&options, "user_agent", CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_userAgent.c_str(), 0);
     }
 
     if (!headers.empty())
@@ -1066,7 +1069,7 @@ DemuxPacket* CDVDDemuxFFmpeg::Read()
         // content has changed
         stream = AddStream(pPacket->iStreamId);
       }
-      if (stream->codec == AV_CODEC_ID_H264)
+      if (stream && stream->codec == AV_CODEC_ID_H264)
         pPacket->recoveryPoint = m_seekToKeyFrame;
       m_seekToKeyFrame = false;
     }
@@ -1520,7 +1523,7 @@ CDemuxStream* CDVDDemuxFFmpeg::AddStream(int streamIdx)
       }
       case AVMEDIA_TYPE_SUBTITLE:
       {
-        if (pStream->codecpar->codec_id == AV_CODEC_ID_DVB_TELETEXT && CServiceBroker::GetSettings()->GetBool(CSettings::SETTING_VIDEOPLAYER_TELETEXTENABLED))
+        if (pStream->codecpar->codec_id == AV_CODEC_ID_DVB_TELETEXT && CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_VIDEOPLAYER_TELETEXTENABLED))
         {
           CDemuxStreamTeletext* st = new CDemuxStreamTeletext();
           stream = st;
@@ -1882,7 +1885,7 @@ unsigned int CDVDDemuxFFmpeg::HLSSelectProgram()
 {
   unsigned int prog = UINT_MAX;
 
-  int bandwidth = CServiceBroker::GetSettings()->GetInt(CSettings::SETTING_NETWORK_BANDWIDTH) * 1000;
+  int bandwidth = CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_NETWORK_BANDWIDTH) * 1000;
   if (bandwidth <= 0)
     bandwidth = INT_MAX;
 

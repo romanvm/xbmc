@@ -12,7 +12,6 @@
 
 #include "FileItem.h"
 #include "ServiceBroker.h"
-#include "settings/Settings.h"
 #include "utils/Variant.h"
 #include "utils/log.h"
 
@@ -204,9 +203,8 @@ void CGUIEPGGridContainerModel::Initialize(const std::unique_ptr<CFileItemList> 
         }
         else
         {
-          CPVREpgInfoTagPtr gapTag(CPVREpgInfoTag::CreateDefaultTag());
-          gapTag->SetChannel(m_channelItems[channel]->GetPVRChannelInfoTag());
-          CFileItemPtr gapItem(new CFileItem(gapTag));
+          const CPVREpgInfoTagPtr gapTag(new CPVREpgInfoTag(m_channelItems[channel]->GetPVRChannelInfoTag()));
+          const CFileItemPtr gapItem(new CFileItem(gapTag));
           for (int i = block + blockDelta; i >= block - itemSize + sizeDelta; --i)
           {
             m_gridIndex[channel][i].item = gapItem;
@@ -229,9 +227,8 @@ void CGUIEPGGridContainerModel::Initialize(const std::unique_ptr<CFileItemList> 
           }
           else
           {
-            CPVREpgInfoTagPtr gapTag(CPVREpgInfoTag::CreateDefaultTag());
-            gapTag->SetChannel(m_channelItems[channel]->GetPVRChannelInfoTag());
-            CFileItemPtr gapItem(new CFileItem(gapTag));
+            const CPVREpgInfoTagPtr gapTag(new CPVREpgInfoTag(m_channelItems[channel]->GetPVRChannelInfoTag()));
+            const CFileItemPtr gapItem(new CFileItem(gapTag));
             m_gridIndex[channel][block].item = gapItem;
           }
 

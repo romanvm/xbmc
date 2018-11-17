@@ -131,7 +131,7 @@ public:
    * \param nativeDisplay native display to use with eglGetPlatformDisplayEXT
    * \param nativeDisplayLegacy native display to use with eglGetDisplay
    */
-  bool CreatePlatformDisplay(void* nativeDisplay, EGLNativeDisplayType nativeDisplayLegacy, EGLint renderableType, EGLint renderingApi);
+  bool CreatePlatformDisplay(void* nativeDisplay, EGLNativeDisplayType nativeDisplayLegacy, EGLint renderableType, EGLint renderingApi, EGLint visualId = 0);
 
   bool CreateSurface(EGLNativeWindowType nativeWindow);
   bool CreatePlatformSurface(void* nativeWindow, EGLNativeWindowType nativeWindowLegacy);
@@ -141,7 +141,7 @@ public:
   void DestroySurface();
   void DestroyContext();
   bool SetVSync(bool enable);
-  void SwapBuffers();
+  bool TrySwapBuffers();
   bool IsPlatformSupported() const;
 
   EGLDisplay GetEGLDisplay() const
@@ -162,7 +162,8 @@ public:
   }
 
 private:
-  bool InitializeDisplay(EGLint renderableType, EGLint renderingApi);
+  bool InitializeDisplay(EGLint renderableType, EGLint renderingApi, EGLint visualId = 0);
+  bool ChooseConfig(EGLint renderableType, EGLint visualId);
   void SurfaceAttrib();
 
   EGLenum m_platform{EGL_NONE};

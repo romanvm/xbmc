@@ -9,11 +9,13 @@
 #include "Album.h"
 #include "music/tags/MusicInfoTag.h"
 #include "settings/AdvancedSettings.h"
+#include "settings/SettingsComponent.h"
 #include "utils/StringUtils.h"
 #include "utils/log.h"
 #include "utils/XMLUtils.h"
 #include "utils/MathUtils.h"
 #include "FileItem.h"
+#include "ServiceBroker.h"
 
 #include <algorithm>
 
@@ -28,8 +30,6 @@ ReleaseTypeInfo releaseTypes[] = {
   { CAlbum::Album,  "album" },
   { CAlbum::Single, "single" }
 };
-
-#define RELEASE_TYPES_SIZE sizeof(releaseTypes) / sizeof(ReleaseTypeInfo)
 
 CAlbum::CAlbum(const CFileItem& item)
 {
@@ -65,7 +65,7 @@ void CAlbum::SetArtistCredits(const std::vector<std::string>& names, const std::
 {
   std::vector<std::string> albumartistHints = hints;
   //Split the artist sort string to try and get sort names for individual artists
-  auto artistSort = StringUtils::Split(strArtistSort, g_advancedSettings.m_musicItemSeparator);
+  auto artistSort = StringUtils::Split(strArtistSort, CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_musicItemSeparator);
   artistCredits.clear();
 
   if (!mbids.empty())
@@ -188,7 +188,7 @@ void CAlbum::SetArtistCredits(const std::vector<std::string>& names, const std::
       albumArtists = albumartistHints;
     else
       // Split album artist names further using multiple possible delimiters, over single separator applied in Tag loader
-      albumArtists = StringUtils::SplitMulti(albumArtists, g_advancedSettings.m_musicArtistSeparators);
+      albumArtists = StringUtils::SplitMulti(albumArtists, CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_musicArtistSeparators);
 
     if (artistSort.size() != albumArtists.size())
       // Split artist sort names further using multiple possible delimiters, over single separator applied in Tag loader
@@ -333,7 +333,7 @@ void CAlbum::MergeScrapedAlbum(const CAlbum& source, bool override /* = true */)
 
 std::string CAlbum::GetGenreString() const
 {
-  return StringUtils::Join(genre, g_advancedSettings.m_musicItemSeparator);
+  return StringUtils::Join(genre, CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_musicItemSeparator);
 }
 
 const std::vector<std::string> CAlbum::GetAlbumArtist() const
@@ -369,7 +369,7 @@ const std::string CAlbum::GetAlbumArtistString() const
     artistvector.emplace_back(i->GetArtist());
   std::string artistString;
   if (!artistvector.empty())
-    artistString = StringUtils::Join(artistvector, g_advancedSettings.m_musicItemSeparator);
+    artistString = StringUtils::Join(artistvector, CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_musicItemSeparator);
   return artistString;
 }
 
@@ -421,9 +421,8 @@ void CAlbum::SetLastPlayed(const std::string& strLastPlayed)
 
 std::string CAlbum::ReleaseTypeToString(CAlbum::ReleaseType releaseType)
 {
-  for (size_t i = 0; i < RELEASE_TYPES_SIZE; i++)
+  for (const ReleaseTypeInfo& releaseTypeInfo : releaseTypes)
   {
-    const ReleaseTypeInfo& releaseTypeInfo = releaseTypes[i];
     if (releaseTypeInfo.type == releaseType)
       return releaseTypeInfo.name;
   }
@@ -433,9 +432,8 @@ std::string CAlbum::ReleaseTypeToString(CAlbum::ReleaseType releaseType)
 
 CAlbum::ReleaseType CAlbum::ReleaseTypeFromString(const std::string& strReleaseType)
 {
-  for (size_t i = 0; i < RELEASE_TYPES_SIZE; i++)
+  for (const ReleaseTypeInfo& releaseTypeInfo : releaseTypes)
   {
-    const ReleaseTypeInfo& releaseTypeInfo = releaseTypes[i];
     if (releaseTypeInfo.name == strReleaseType)
       return releaseTypeInfo.type;
   }
@@ -467,17 +465,19 @@ bool CAlbum::Load(const TiXmlElement *album, bool append, bool prioritise)
   if (!append)
     Reset();
 
+  const std::string itemSeparator = CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_musicItemSeparator;
+
   XMLUtils::GetString(album,              "title", strAlbum);
   XMLUtils::GetString(album, "musicbrainzalbumid", strMusicBrainzAlbumID);
   XMLUtils::GetString(album, "musicbrainzreleasegroupid", strReleaseGroupMBID);
   XMLUtils::GetBoolean(album, "scrapedmbid", bScrapedMBID);
   XMLUtils::GetString(album, "artistdesc", strArtistDesc);
   std::vector<std::string> artist; // Support old style <artist></artist> for backwards compatibility
-  XMLUtils::GetStringArray(album, "artist", artist, prioritise, g_advancedSettings.m_musicItemSeparator);
-  XMLUtils::GetStringArray(album, "genre", genre, prioritise, g_advancedSettings.m_musicItemSeparator);
-  XMLUtils::GetStringArray(album, "style", styles, prioritise, g_advancedSettings.m_musicItemSeparator);
-  XMLUtils::GetStringArray(album, "mood", moods, prioritise, g_advancedSettings.m_musicItemSeparator);
-  XMLUtils::GetStringArray(album, "theme", themes, prioritise, g_advancedSettings.m_musicItemSeparator);
+  XMLUtils::GetStringArray(album, "artist", artist, prioritise, itemSeparator);
+  XMLUtils::GetStringArray(album, "genre", genre, prioritise, itemSeparator);
+  XMLUtils::GetStringArray(album, "style", styles, prioritise, itemSeparator);
+  XMLUtils::GetStringArray(album, "mood", moods, prioritise, itemSeparator);
+  XMLUtils::GetStringArray(album, "theme", themes, prioritise, itemSeparator);
   XMLUtils::GetBoolean(album, "compilation", bCompilation);
 
   XMLUtils::GetString(album,"review",strReview);

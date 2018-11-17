@@ -165,6 +165,15 @@ void CDRMUtils::FreeProperties(struct drm_object *object)
   object->id = 0;
 }
 
+bool CDRMUtils::SupportsProperty(struct drm_object *object, const char *name)
+{
+  for (uint32_t i = 0; i < object->props->count_props; i++)
+    if (!strcmp(object->props_info[i]->name, name))
+      return true;
+
+  return false;
+}
+
 uint32_t CDRMUtils::GetPropertyId(struct drm_object *object, const char *name)
 {
   for (uint32_t i = 0; i < object->props->count_props; i++)
@@ -717,4 +726,14 @@ std::vector<RESOLUTION_INFO> CDRMUtils::GetModes()
   }
 
   return resolutions;
+}
+
+uint32_t CDRMUtils::FourCCWithAlpha(uint32_t fourcc)
+{
+  return (fourcc & 0xFFFFFF00) | static_cast<uint32_t>('A');
+}
+
+uint32_t CDRMUtils::FourCCWithoutAlpha(uint32_t fourcc)
+{
+  return (fourcc & 0xFFFFFF00) | static_cast<uint32_t>('X');
 }

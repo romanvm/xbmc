@@ -37,10 +37,15 @@ void CApplicationPlayer::ClosePlayer()
   if (player)
   {
     CloseFile();
-    // we need to do this directly on the member
-    CSingleLock lock(m_playerLock);
-    m_pPlayer.reset();
+    ResetPlayer();
   }
+}
+
+void CApplicationPlayer::ResetPlayer()
+{
+  // we need to do this directly on the member
+  CSingleLock lock(m_playerLock);
+  m_pPlayer.reset();
 }
 
 void CApplicationPlayer::CloseFile(bool reopen)
@@ -113,6 +118,15 @@ bool CApplicationPlayer::OpenFile(const CFileItem& item, const CPlayerOptions& o
         m_pPlayer.reset();
       }
       return true;
+    }
+  }
+  else if (player && player->m_name != newPlayer)
+  {
+    CloseFile();
+    {
+      CSingleLock lock(m_playerLock);
+      m_pPlayer.reset();
+      player.reset();
     }
   }
 

@@ -11,6 +11,7 @@
 #include "ServiceBroker.h"
 #include "guilib/LocalizeStrings.h"
 #include "settings/Settings.h"
+#include "settings/SettingsComponent.h"
 #include "settings/lib/SettingsManager.h"
 #include "utils/StringUtils.h"
 #include "utils/log.h"
@@ -23,21 +24,23 @@ using namespace PVR;
 CPVRSettings::CPVRSettings(const std::set<std::string> &settingNames)
 {
   Init(settingNames);
-  CServiceBroker::GetSettings()->GetSettingsManager()->RegisterSettingsHandler(this);
-  CServiceBroker::GetSettings()->RegisterCallback(this, settingNames);
+  const std::shared_ptr<CSettings> settings = CServiceBroker::GetSettingsComponent()->GetSettings();
+  settings->GetSettingsManager()->RegisterSettingsHandler(this);
+  settings->RegisterCallback(this, settingNames);
 }
 
 CPVRSettings::~CPVRSettings()
 {
-  CServiceBroker::GetSettings()->UnregisterCallback(this);
-  CServiceBroker::GetSettings()->GetSettingsManager()->UnregisterSettingsHandler(this);
+  const std::shared_ptr<CSettings> settings = CServiceBroker::GetSettingsComponent()->GetSettings();
+  settings->UnregisterCallback(this);
+  settings->GetSettingsManager()->UnregisterSettingsHandler(this);
 }
 
 void CPVRSettings::Init(const std::set<std::string> &settingNames)
 {
   for (auto settingName : settingNames)
   {
-    SettingPtr setting = CServiceBroker::GetSettings()->GetSetting(settingName);
+    SettingPtr setting = CServiceBroker::GetSettingsComponent()->GetSettings()->GetSetting(settingName);
     if (!setting)
     {
       CLog::LogF(LOGERROR, "Unknown PVR setting '%s'", settingName.c_str());
@@ -127,11 +130,9 @@ void CPVRSettings::MarginTimeFiller(
   {
     0, 1, 3, 5, 10, 15, 20, 30, 60, 90, 120, 180 // minutes
   };
-  static const size_t marginTimeValuesCount = sizeof(marginTimeValues) / sizeof(int);
 
-  for (size_t i = 0; i < marginTimeValuesCount; ++i)
+  for (int iValue : marginTimeValues)
   {
-    int iValue = marginTimeValues[i];
     list.push_back(
       std::make_pair(StringUtils::Format(g_localizeStrings.Get(14044).c_str(), iValue) /* %i min */, iValue));
   }

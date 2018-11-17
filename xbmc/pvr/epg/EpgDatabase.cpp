@@ -10,9 +10,11 @@
 
 #include <cstdlib>
 
+#include "ServiceBroker.h"
 #include "addons/kodi-addon-dev-kit/include/kodi/xbmc_pvr_types.h"
 #include "dbwrappers/dataset.h"
 #include "settings/AdvancedSettings.h"
+#include "settings/SettingsComponent.h"
 #include "utils/log.h"
 #include "utils/StringUtils.h"
 
@@ -24,7 +26,7 @@ using namespace PVR;
 bool CPVREpgDatabase::Open()
 {
   CSingleLock lock(m_critSection);
-  return CDatabase::Open(g_advancedSettings.m_databaseEpg);
+  return CDatabase::Open(CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_databaseEpg);
 }
 
 void CPVREpgDatabase::Close()
@@ -185,13 +187,13 @@ bool CPVREpgDatabase::DeleteEpgEntries(const CDateTime &maxEndTime)
 bool CPVREpgDatabase::Delete(const CPVREpgInfoTag &tag)
 {
   /* tag without a database ID was not persisted */
-  if (tag.BroadcastId() <= 0)
+  if (tag.DatabaseID() <= 0)
     return false;
 
   Filter filter;
 
   CSingleLock lock(m_critSection);
-  filter.AppendWhere(PrepareSQL("idBroadcast = %u", tag.BroadcastId()));
+  filter.AppendWhere(PrepareSQL("idBroadcast = %u", tag.DatabaseID()));
   return DeleteValues("epgtags", filter);
 }
 
@@ -256,7 +258,7 @@ std::vector<CPVREpgInfoTagPtr> CPVREpgDatabase::Get(const CPVREpg &epg)
         // Compat: null value for broadcast uid changed from numerical -1 to 0 with PVR Addon API v4.0.0
         newTag->m_iUniqueBroadcastID = iBroadcastUID == -1 ? EPG_TAG_INVALID_UID : iBroadcastUID;
 
-        newTag->m_iBroadcastId       = m_pDS->fv("idBroadcast").get_asInt();
+        newTag->m_iDatabaseID        = m_pDS->fv("idBroadcast").get_asInt();
         newTag->m_strTitle           = m_pDS->fv("sTitle").get_asString().c_str();
         newTag->m_strPlotOutline     = m_pDS->fv("sPlotOutline").get_asString().c_str();
         newTag->m_strPlot            = m_pDS->fv("sPlot").get_asString().c_str();
@@ -366,7 +368,7 @@ int CPVREpgDatabase::Persist(const CPVREpgInfoTag &tag, bool bSingleUpdate /* = 
   tag.EndAsUTC().GetAsTime(iEndTime);
   tag.FirstAiredAsUTC().GetAsTime(iFirstAired);
 
-  int iBroadcastId = tag.BroadcastId();
+  int iBroadcastId = tag.DatabaseID();
   std::string strQuery;
 
   /* Only store the genre string when needed */

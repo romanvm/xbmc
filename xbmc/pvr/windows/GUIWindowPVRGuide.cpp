@@ -19,6 +19,7 @@
 #include "messaging/ApplicationMessenger.h"
 #include "messaging/helpers/DialogHelper.h"
 #include "settings/Settings.h"
+#include "settings/SettingsComponent.h"
 #include "threads/SingleLock.h"
 #include "view/GUIViewState.h"
 
@@ -381,7 +382,7 @@ bool CGUIWindowPVRGuideBase::OnMessage(CGUIMessage& message)
           {
             case ACTION_SELECT_ITEM:
             case ACTION_MOUSE_LEFT_CLICK:
-              switch(CServiceBroker::GetSettings()->GetInt(CSettings::SETTING_EPG_SELECTACTION))
+              switch(CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_EPG_SELECTACTION))
               {
                 case EPG_SELECT_ACTION_CONTEXT_MENU:
                   OnPopupMenu(iItem);
@@ -615,11 +616,19 @@ bool CGUIWindowPVRGuideBase::RefreshTimelineItems()
       if (!endDate.IsValid() || endDate < startDate)
         endDate = startDate;
 
-      // limit start to linger time
-      int iPastDays = CServiceBroker::GetPVRManager().EpgContainer().GetPastDaysToDisplay();
+      CPVREpgContainer& epgContainer = CServiceBroker::GetPVRManager().EpgContainer();
+
+      // limit start to past days to display
+      int iPastDays = epgContainer.GetPastDaysToDisplay();
       const CDateTime maxPastDate(currentDate - CDateTimeSpan(iPastDays, 0, 0, 0));
       if (startDate < maxPastDate)
         startDate = maxPastDate;
+
+      // limit end to future days to display
+      int iFutureDays = epgContainer.GetFutureDaysToDisplay();
+      const CDateTime maxFutureDate(currentDate + CDateTimeSpan(iFutureDays, 0, 0, 0));
+      if (endDate > maxFutureDate)
+        endDate = maxFutureDate;
 
       if (m_guiState.get())
         timeline->Sort(m_guiState->GetSortMethod());

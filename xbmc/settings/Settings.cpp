@@ -45,7 +45,7 @@
 #include "profiles/ProfilesManager.h"
 #include "pvr/PVRSettings.h"
 #include "pvr/windows/GUIWindowPVRGuide.h"
-#include "settings/AdvancedSettings.h"
+#include "ServiceBroker.h"
 #include "settings/DisplaySettings.h"
 #include "settings/MediaSettings.h"
 #include "settings/MediaSourceSettings.h"
@@ -240,6 +240,7 @@ const std::string CSettings::SETTING_PVRPARENTAL_DURATION = "pvrparental.duratio
 const std::string CSettings::SETTING_PVRCLIENT_MENUHOOK = "pvrclient.menuhook";
 const std::string CSettings::SETTING_PVRTIMERS_HIDEDISABLEDTIMERS = "pvrtimers.hidedisabledtimers";
 const std::string CSettings::SETTING_MUSICLIBRARY_SHOWCOMPILATIONARTISTS = "musiclibrary.showcompilationartists";
+const std::string CSettings::SETTING_MUSICLIBRARY_USEARTISTSORTNAME = "musiclibrary.useartistsortname";
 const std::string CSettings::SETTING_MUSICLIBRARY_DOWNLOADINFO = "musiclibrary.downloadinfo";
 const std::string CSettings::SETTING_MUSICLIBRARY_ARTISTSFOLDER = "musiclibrary.artistsfolder";
 const std::string CSettings::SETTING_MUSICLIBRARY_PREFERONLINEALBUMART = "musiclibrary.preferonlinealbumart";
@@ -700,7 +701,6 @@ void CSettings::InitializeOptionFillers()
   GetSettingsManager()->RegisterSettingOptionsFiller("timezones", CLinuxTimezone::SettingOptionsTimezonesFiller);
 #endif
   GetSettingsManager()->RegisterSettingOptionsFiller("keyboardlayouts", CKeyboardLayoutManager::SettingOptionsKeyboardLayoutsFiller);
-  GetSettingsManager()->RegisterSettingOptionsFiller("loggingcomponents", CAdvancedSettings::SettingOptionsLoggingComponentsFiller);
   GetSettingsManager()->RegisterSettingOptionsFiller("pvrrecordmargins", PVR::CPVRSettings::MarginTimeFiller);
 }
 
@@ -752,9 +752,7 @@ void CSettings::UninitializeOptionFillers()
 
 void CSettings::InitializeConditions()
 {
-  const CProfilesManager &profileManager = CServiceBroker::GetProfileManager();
-
-  CSettingConditions::Initialize(profileManager);
+  CSettingConditions::Initialize();
 
   // add basic conditions
   const std::set<std::string> &simpleConditions = CSettingConditions::GetSimpleConditions();
@@ -776,7 +774,6 @@ void CSettings::InitializeISettingsHandlers()
 {
   // register ISettingsHandler implementations
   // The order of these matters! Handlers are processed in the order they were registered.
-  GetSettingsManager()->RegisterSettingsHandler(&g_advancedSettings);
   GetSettingsManager()->RegisterSettingsHandler(&CMediaSourceSettings::GetInstance());
 #ifdef HAS_UPNP
   GetSettingsManager()->RegisterSettingsHandler(&CUPnPSettings::GetInstance());
@@ -793,23 +790,19 @@ void CSettings::InitializeISettingsHandlers()
 
 void CSettings::UninitializeISettingsHandlers()
 {
-  // unregister ISettingCallback implementations
-  GetSettingsManager()->UnregisterCallback(&g_advancedSettings);
-  GetSettingsManager()->UnregisterCallback(&CMediaSettings::GetInstance());
-  GetSettingsManager()->UnregisterCallback(&CDisplaySettings::GetInstance());
-  GetSettingsManager()->UnregisterCallback(&g_application.GetAppPlayer().GetSeekHandler());
-  GetSettingsManager()->UnregisterCallback(&g_application);
-  GetSettingsManager()->UnregisterCallback(&g_charsetConverter);
-  GetSettingsManager()->UnregisterCallback(&g_langInfo);
-  GetSettingsManager()->UnregisterCallback(&g_passwordManager);
-  GetSettingsManager()->UnregisterCallback(&CRssManager::GetInstance());
+  // unregister ISettingsHandler implementations
+  GetSettingsManager()->UnregisterSettingsHandler(&CMediaSettings::GetInstance());
 #if defined(TARGET_LINUX)
-  GetSettingsManager()->UnregisterCallback(&g_timezone);
+  GetSettingsManager()->UnregisterSettingsHandler(&g_timezone);
 #endif // defined(TARGET_LINUX)
-#if defined(TARGET_DARWIN_OSX)
-  GetSettingsManager()->UnregisterCallback(&XBMCHelper::GetInstance());
+  GetSettingsManager()->UnregisterSettingsHandler(&g_application);
+  GetSettingsManager()->UnregisterSettingsHandler(&g_langInfo);
+  GetSettingsManager()->UnregisterSettingsHandler(&CRssManager::GetInstance());
+  GetSettingsManager()->UnregisterSettingsHandler(&CWakeOnAccess::GetInstance());
+#ifdef HAS_UPNP
+  GetSettingsManager()->UnregisterSettingsHandler(&CUPnPSettings::GetInstance());
 #endif
-  GetSettingsManager()->UnregisterCallback(&CWakeOnAccess::GetInstance());
+  GetSettingsManager()->UnregisterSettingsHandler(&CMediaSourceSettings::GetInstance());
 }
 
 void CSettings::InitializeISubSettings()
@@ -838,12 +831,6 @@ void CSettings::InitializeISettingCallbacks()
 {
   // register any ISettingCallback implementations
   std::set<std::string> settingSet;
-  settingSet.insert(CSettings::SETTING_DEBUG_SHOWLOGINFO);
-  settingSet.insert(CSettings::SETTING_DEBUG_EXTRALOGGING);
-  settingSet.insert(CSettings::SETTING_DEBUG_SETEXTRALOGLEVEL);
-  GetSettingsManager()->RegisterCallback(&g_advancedSettings, settingSet);
-
-  settingSet.clear();
   settingSet.insert(CSettings::SETTING_MUSICLIBRARY_CLEANUP);
   settingSet.insert(CSettings::SETTING_MUSICLIBRARY_EXPORT);
   settingSet.insert(CSettings::SETTING_MUSICLIBRARY_IMPORT);
@@ -960,7 +947,6 @@ void CSettings::InitializeISettingCallbacks()
 
 void CSettings::UninitializeISettingCallbacks()
 {
-  GetSettingsManager()->UnregisterCallback(&g_advancedSettings);
   GetSettingsManager()->UnregisterCallback(&CMediaSettings::GetInstance());
   GetSettingsManager()->UnregisterCallback(&CDisplaySettings::GetInstance());
   GetSettingsManager()->UnregisterCallback(&g_application.GetAppPlayer().GetSeekHandler());

@@ -22,6 +22,7 @@
 #include "utils/XBMCTinyXML.h"
 #include "listproviders/IListProvider.h"
 #include "settings/Settings.h"
+#include "settings/SettingsComponent.h"
 #include "guilib/guiinfo/GUIInfoLabels.h"
 
 #define HOLD_TIME_START 100
@@ -571,7 +572,7 @@ void CGUIBaseContainer::OnJumpLetter(char letter, bool skip /*=false*/)
   {
     CGUIListItemPtr item = m_items[i];
     std::string label = item->GetLabel();
-    if (CServiceBroker::GetSettings()->GetBool(CSettings::SETTING_FILELISTS_IGNORETHEWHENSORTING))
+    if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_FILELISTS_IGNORETHEWHENSORTING))
       label = SortUtils::RemoveArticles(label);
     if (0 == strnicmp(label.c_str(), m_match.c_str(), m_match.size()))
     {
@@ -751,12 +752,12 @@ EVENT_RESULT CGUIBaseContainer::OnMouseEvent(const CPoint &point, const CMouseEv
 bool CGUIBaseContainer::OnClick(int actionID)
 {
   int subItem = 0;
-  if (actionID == ACTION_SELECT_ITEM || actionID == ACTION_MOUSE_LEFT_CLICK)
+  if (actionID == ACTION_SELECT_ITEM || actionID == ACTION_MOUSE_LEFT_CLICK || actionID == ACTION_PLAYER_PLAY)
   {
     if (m_listProvider)
     { // "select" action
       int selected = GetSelectedItem();
-      if (selected >= 0 && selected < (int)m_items.size())
+      if (selected >= 0 && selected < static_cast<int>(m_items.size()))
       {
         if (m_clickActions.HasActionsMeetingCondition())
           m_clickActions.ExecuteActions(0, GetParentID(), m_items[selected]);

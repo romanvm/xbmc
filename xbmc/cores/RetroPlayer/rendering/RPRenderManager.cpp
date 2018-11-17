@@ -19,7 +19,6 @@
 #include "cores/RetroPlayer/process/RPProcessInfo.h"
 #include "cores/RetroPlayer/rendering/VideoRenderers/RPBaseRenderer.h"
 #include "utils/TransformMatrix.h"
-#include "messaging/ApplicationMessenger.h"
 #include "threads/SingleLock.h"
 #include "utils/Color.h"
 #include "utils/log.h"
@@ -232,8 +231,6 @@ void CRPRenderManager::FrameMove()
     {
       m_processInfo.ConfigureRenderSystem(m_format);
 
-      MESSAGING::CApplicationMessenger::GetInstance().PostMsg(TMSG_SWITCHTOFULLSCREEN);
-
       m_state = RENDER_STATE::CONFIGURED;
 
       CLog::Log(LOGINFO, "RetroPlayer[RENDER]: Renderer configured on first frame");
@@ -427,7 +424,7 @@ std::shared_ptr<CRPBaseRenderer> CRPRenderManager::GetRenderer(const IGUIRenderS
   if (renderer)
   {
     renderer->SetScalingMethod(effectiveRenderSettings.VideoSettings().GetScalingMethod());
-    renderer->SetViewMode(effectiveRenderSettings.VideoSettings().GetRenderViewMode());
+    renderer->SetStretchMode(effectiveRenderSettings.VideoSettings().GetRenderStretchMode());
     renderer->SetRenderRotation(effectiveRenderSettings.VideoSettings().GetRenderRotation());
   }
 
@@ -619,8 +616,8 @@ CRenderVideoSettings CRPRenderManager::GetEffectiveSettings(const IGUIRenderSett
   {
     if (settings->HasVideoFilter())
       effectiveSettings.SetVideoFilter(settings->GetSettings().VideoSettings().GetVideoFilter());
-    if (settings->HasViewMode())
-      effectiveSettings.SetRenderViewMode(settings->GetSettings().VideoSettings().GetRenderViewMode());
+    if (settings->HasStretchMode())
+      effectiveSettings.SetRenderStretchMode(settings->GetSettings().VideoSettings().GetRenderStretchMode());
     if (settings->HasRotation())
       effectiveSettings.SetRenderRotation(settings->GetSettings().VideoSettings().GetRenderRotation());
   }

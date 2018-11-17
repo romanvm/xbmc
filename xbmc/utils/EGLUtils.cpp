@@ -11,7 +11,9 @@
 
 #include "StringUtils.h"
 #include "guilib/IDirtyRegionSolver.h"
+#include "ServiceBroker.h"
 #include "settings/AdvancedSettings.h"
+#include "settings/SettingsComponent.h"
 
 #include <EGL/eglext.h>
 
@@ -93,7 +95,7 @@ bool CEGLContextUtils::CreateDisplay(EGLNativeDisplayType nativeDisplay, EGLint 
   return InitializeDisplay(renderableType, renderingApi);
 }
 
-bool CEGLContextUtils::CreatePlatformDisplay(void* nativeDisplay, EGLNativeDisplayType nativeDisplayLegacy, EGLint renderableType, EGLint renderingApi)
+bool CEGLContextUtils::CreatePlatformDisplay(void* nativeDisplay, EGLNativeDisplayType nativeDisplayLegacy, EGLint renderableType, EGLint renderingApi, EGLint visualId)
 {
   if (m_eglDisplay != EGL_NO_DISPLAY)
   {
@@ -123,10 +125,11 @@ bool CEGLContextUtils::CreatePlatformDisplay(void* nativeDisplay, EGLNativeDispl
   {
     return CreateDisplay(nativeDisplayLegacy, renderableType, renderingApi);
   }
-  return InitializeDisplay(renderableType, renderingApi);
+
+  return InitializeDisplay(renderableType, renderingApi, visualId);
 }
 
-bool CEGLContextUtils::InitializeDisplay(EGLint renderableType, EGLint renderingApi)
+bool CEGLContextUtils::InitializeDisplay(EGLint renderableType, EGLint renderingApi, EGLint visualId)
 {
   int major, minor;
   if (!eglInitialize(m_eglDisplay, &major, &minor))
@@ -144,40 +147,64 @@ bool CEGLContextUtils::InitializeDisplay(EGLint renderableType, EGLint rendering
     return false;
   }
 
+  if (!ChooseConfig(renderableType, visualId))
+    return false;
+
+  return true;
+}
+
+bool CEGLContextUtils::ChooseConfig(EGLint renderableType, EGLint visualId)
+{
+  EGLint numMatched{0};
+
   EGLint surfaceType = EGL_WINDOW_BIT;
   // for the non-trivial dirty region modes, we need the EGL buffer to be preserved across updates
-  if (g_advancedSettings.m_guiAlgorithmDirtyRegions == DIRTYREGION_SOLVER_COST_REDUCTION ||
-      g_advancedSettings.m_guiAlgorithmDirtyRegions == DIRTYREGION_SOLVER_UNION)
+  int guiAlgorithmDirtyRegions = CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_guiAlgorithmDirtyRegions;
+  if (guiAlgorithmDirtyRegions == DIRTYREGION_SOLVER_COST_REDUCTION ||
+      guiAlgorithmDirtyRegions == DIRTYREGION_SOLVER_UNION)
     surfaceType |= EGL_SWAP_BEHAVIOR_PRESERVED_BIT;
 
-  EGLint attribs[] =
-  {
-    EGL_RED_SIZE, 8,
-    EGL_GREEN_SIZE, 8,
-    EGL_BLUE_SIZE, 8,
-    EGL_ALPHA_SIZE, 8,
-    EGL_DEPTH_SIZE, 16,
-    EGL_STENCIL_SIZE, 0,
-    EGL_SAMPLE_BUFFERS, 0,
-    EGL_SAMPLES, 0,
-    EGL_SURFACE_TYPE, surfaceType,
-    EGL_RENDERABLE_TYPE, renderableType,
-    EGL_NONE
-  };
+  CEGLAttributes<10> attribs;
+  attribs.Add({{EGL_RED_SIZE, 8},
+               {EGL_GREEN_SIZE, 8},
+               {EGL_BLUE_SIZE, 8},
+               {EGL_ALPHA_SIZE, 2},
+               {EGL_DEPTH_SIZE, 16},
+               {EGL_STENCIL_SIZE, 0},
+               {EGL_SAMPLE_BUFFERS, 0},
+               {EGL_SAMPLES, 0},
+               {EGL_SURFACE_TYPE, surfaceType},
+               {EGL_RENDERABLE_TYPE, renderableType}});
 
-  EGLint neglconfigs = 0;
-  if (eglChooseConfig(m_eglDisplay, attribs, &m_eglConfig, 1, &neglconfigs) != EGL_TRUE)
+  if (eglChooseConfig(m_eglDisplay, attribs.Get(), nullptr, 0, &numMatched) != EGL_TRUE)
   {
     CEGLUtils::LogError("failed to query number of EGL configs");
     Destroy();
     return false;
   }
 
-  if (neglconfigs <= 0)
+  std::vector<EGLConfig> eglConfigs(numMatched);
+
+  if (eglChooseConfig(m_eglDisplay, attribs.Get(), eglConfigs.data(), numMatched, &numMatched) != EGL_TRUE)
   {
-    CLog::Log(LOGERROR, "No suitable EGL configs found");
+    CEGLUtils::LogError("failed to find EGL configs with appropriate attributes");
     Destroy();
     return false;
+  }
+
+  for (const auto &eglConfig: eglConfigs)
+  {
+    m_eglConfig = eglConfig;
+
+    if (visualId == 0)
+      break;
+
+    EGLint id{0};
+    if (eglGetConfigAttrib(m_eglDisplay, m_eglConfig, EGL_NATIVE_VISUAL_ID, &id) != EGL_TRUE)
+      CEGLUtils::LogError("failed to query EGL attibute EGL_NATIVE_VISUAL_ID");
+
+    if (visualId == id)
+      break;
   }
 
   return true;
@@ -228,8 +255,9 @@ void CEGLContextUtils::SurfaceAttrib()
   }
 
   // for the non-trivial dirty region modes, we need the EGL buffer to be preserved across updates
-  if (g_advancedSettings.m_guiAlgorithmDirtyRegions == DIRTYREGION_SOLVER_COST_REDUCTION ||
-      g_advancedSettings.m_guiAlgorithmDirtyRegions == DIRTYREGION_SOLVER_UNION)
+  int guiAlgorithmDirtyRegions = CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_guiAlgorithmDirtyRegions;
+  if (guiAlgorithmDirtyRegions == DIRTYREGION_SOLVER_COST_REDUCTION ||
+      guiAlgorithmDirtyRegions == DIRTYREGION_SOLVER_UNION)
   {
     if (eglSurfaceAttrib(m_eglDisplay, m_eglSurface, EGL_SWAP_BEHAVIOR, EGL_BUFFER_PRESERVED) != EGL_TRUE)
     {
@@ -332,22 +360,20 @@ void CEGLContextUtils::DestroySurface()
 
 bool CEGLContextUtils::SetVSync(bool enable)
 {
+  if (m_eglDisplay == EGL_NO_DISPLAY)
+  {
+    return false;
+  }
+
   return (eglSwapInterval(m_eglDisplay, enable) == EGL_TRUE);
 }
 
-void CEGLContextUtils::SwapBuffers()
+bool CEGLContextUtils::TrySwapBuffers()
 {
   if (m_eglDisplay == EGL_NO_DISPLAY || m_eglSurface == EGL_NO_SURFACE)
   {
-    return;
+    return false;
   }
 
-  if (eglSwapBuffers(m_eglDisplay, m_eglSurface) != EGL_TRUE)
-  {
-    // For now we just hard fail if this fails
-    // Theoretically, EGL_CONTEXT_LOST could be handled, but it needs to be checked
-    // whether egl implementations actually use it (mesa does not)
-    CEGLUtils::LogError("eglSwapBuffers failed");
-    throw std::runtime_error("eglSwapBuffers failed");
-  }
+  return (eglSwapBuffers(m_eglDisplay, m_eglSurface) == EGL_TRUE);
 }

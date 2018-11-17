@@ -94,22 +94,14 @@ void CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool video
 
 void CDRMAtomic::FlipPage(struct gbm_bo *bo, bool rendered, bool videoLayer)
 {
-  uint32_t flags = 0;
-
-  if(m_need_modeset)
-  {
-    flags |= DRM_MODE_ATOMIC_ALLOW_MODESET;
-    m_need_modeset = false;
-  }
-
   struct drm_fb *drm_fb = nullptr;
 
   if (rendered)
   {
     if (videoLayer)
-      m_overlay_plane->format = DRM_FORMAT_ARGB8888;
+      m_overlay_plane->format = CDRMUtils::FourCCWithAlpha(m_overlay_plane->format);
     else
-      m_overlay_plane->format = DRM_FORMAT_XRGB8888;
+      m_overlay_plane->format = CDRMUtils::FourCCWithoutAlpha(m_overlay_plane->format);
 
     drm_fb = CDRMUtils::DrmFbGetFromBo(bo);
     if (!drm_fb)
@@ -117,6 +109,14 @@ void CDRMAtomic::FlipPage(struct gbm_bo *bo, bool rendered, bool videoLayer)
       CLog::Log(LOGERROR, "CDRMAtomic::%s - Failed to get a new FBO", __FUNCTION__);
       return;
     }
+  }
+
+  uint32_t flags = 0;
+
+  if (m_need_modeset)
+  {
+    flags |= DRM_MODE_ATOMIC_ALLOW_MODESET;
+    m_need_modeset = false;
   }
 
   DrmAtomicCommit(!drm_fb ? 0 : drm_fb->fb_id, flags, rendered, videoLayer);

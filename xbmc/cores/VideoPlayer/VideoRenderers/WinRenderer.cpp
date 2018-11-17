@@ -20,6 +20,7 @@
 #include "settings/DisplaySettings.h"
 #include "settings/MediaSettings.h"
 #include "settings/Settings.h"
+#include "settings/SettingsComponent.h"
 #include "ServiceBroker.h"
 #include "system.h"
 #include "threads/SingleLock.h"
@@ -94,8 +95,9 @@ CWinRenderer::CWinRenderer() : CBaseRenderer()
 
   m_colorManager = std::make_unique<CColorManager>();
   m_outputShader.reset();
-  m_useDithering = CServiceBroker::GetSettings()->GetBool("videoscreen.dither");
-  m_ditherDepth = CServiceBroker::GetSettings()->GetInt("videoscreen.ditherdepth");
+  const std::shared_ptr<CSettings> settings = CServiceBroker::GetSettingsComponent()->GetSettings();
+  m_useDithering = settings->GetBool("videoscreen.dither");
+  m_ditherDepth = settings->GetInt("videoscreen.ditherdepth");
 
   PreInit();
 }
@@ -259,7 +261,7 @@ int CWinRenderer::NextBuffer() const
   return -1;
 }
 
-void CWinRenderer::AddVideoPicture(const VideoPicture &picture, int index, double currentClock)
+void CWinRenderer::AddVideoPicture(const VideoPicture &picture, int index)
 {
   m_renderBuffers[index].AppendPicture(picture);
   m_renderBuffers[index].frameIdx = m_frameIdx;
@@ -276,10 +278,7 @@ void CWinRenderer::Update()
 
 void CWinRenderer::RenderUpdate(int index, int index2, bool clear, unsigned int flags, unsigned int alpha)
 {
-  if (index2 >= 0)
-    m_iYV12RenderBuffer = index2;
-  else
-    m_iYV12RenderBuffer = index;
+  m_iYV12RenderBuffer = index;
 
   if (clear)
     CServiceBroker::GetWinSystem()->GetGfxContext().Clear(DX::Windowing()->UseLimitedColor() ? 0x101010 : 0);
@@ -290,35 +289,7 @@ void CWinRenderer::RenderUpdate(int index, int index2, bool clear, unsigned int 
   DX::Windowing()->SetAlphaBlendEnable(alpha < 255);
   ManageTextures();
   ManageRenderArea();
-
-  CD3DTexture* backBuffer = DX::Windowing()->GetBackBuffer();
-
-  Render(flags, backBuffer);
-
-  if (index2 > 0 && backBuffer)
-  {
-    m_iYV12RenderBuffer = index;
-
-    if (!m_smoothTarget.Get() || m_smoothTarget.GetWidth() != backBuffer->GetWidth() ||
-        m_smoothTarget.GetHeight() != backBuffer->GetHeight())
-    {
-      m_smoothTarget.Release();
-      m_smoothTarget.Create(backBuffer->GetWidth(), backBuffer->GetHeight(), 1, D3D11_USAGE_DEFAULT,
-                            backBuffer->GetFormat());
-    }
-
-    if (m_smoothTarget.Get())
-    {
-      Render(flags, &m_smoothTarget);
-
-      DX::Windowing()->SetAlphaBlendEnable(true);
-      CRect texCoord = {0, 0, 1, 1};
-      CRect trgCoord = {0, 0, static_cast<float>(backBuffer->GetWidth()),
-                        static_cast<float>(backBuffer->GetHeight())};
-      CD3DTexture::DrawQuad(trgCoord, 0x80FFFFFF, &m_smoothTarget, &texCoord,
-                            SHADER_METHOD_RENDER_TEXTURE_BLEND);
-    }
-  }
+  Render(flags, DX::Windowing()->GetBackBuffer());
 }
 
 void CWinRenderer::PreInit()
@@ -327,7 +298,7 @@ void CWinRenderer::PreInit()
   m_bConfigured = false;
   UnInit();
 
-  m_iRequestedMethod = CServiceBroker::GetSettings()->GetInt(CSettings::SETTING_VIDEOPLAYER_RENDERMETHOD);
+  m_iRequestedMethod = CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_VIDEOPLAYER_RENDERMETHOD);
 
   m_processor = std::make_unique<DXVA::CProcessorHD>();
   if (!m_processor->PreInit())
@@ -500,7 +471,7 @@ EBufferFormat CWinRenderer::SelectBufferFormat(AVPixelFormat format, const Rende
       return BUFFER_FMT_YUV420P16;
     // is they still used?
     case AV_PIX_FMT_YUYV422:
-      return BUFFER_FMT_YUV420P16;
+      return BUFFER_FMT_YUYV422;
     case AV_PIX_FMT_UYVY422:
       return BUFFER_FMT_UYVY422;
     default:
@@ -557,7 +528,7 @@ void CWinRenderer::SelectPSVideoFilter()
     bool scaleSD = m_sourceHeight < 720 && m_sourceWidth < 1280;
     bool scaleUp = static_cast<int>(m_sourceHeight) < CServiceBroker::GetWinSystem()->GetGfxContext().GetHeight()
                 && static_cast<int>(m_sourceWidth) < CServiceBroker::GetWinSystem()->GetGfxContext().GetWidth();
-    bool scaleFps = m_fps < (g_advancedSettings.m_videoAutoScaleMaxFps + 0.01f);
+    bool scaleFps = m_fps < (CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_videoAutoScaleMaxFps + 0.01f);
 
     if (m_renderMethod == RENDER_DXVA)
     {
@@ -959,8 +930,8 @@ void CWinRenderer::RenderHW(DWORD flags, CD3DTexture* target)
   if (target != DX::Windowing()->GetBackBuffer())
   {
     // rendering capture
-    targetRect.x2 = target->GetWidth();
-    targetRect.y2 = target->GetHeight();
+    targetRect.x2 = static_cast<float>(target->GetWidth());
+    targetRect.y2 = static_cast<float>(target->GetHeight());
   }
   CWIN32Util::CropSource(src, dst, targetRect, m_renderOrientation);
 
@@ -1070,7 +1041,7 @@ bool CWinRenderer::Supports(ESCALINGMETHOD method)
       if (method == VS_SCALINGMETHOD_DXVA_HARDWARE
        || method == VS_SCALINGMETHOD_AUTO)
         return true;
-      if (!g_advancedSettings.m_DXVAAllowHqScaling || m_renderOrientation)
+      if (!CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_DXVAAllowHqScaling || m_renderOrientation)
         return false;
     }
 
@@ -1090,7 +1061,7 @@ bool CWinRenderer::Supports(ESCALINGMETHOD method)
         // if scaling is below level, avoid hq scaling
         float scaleX = fabs((static_cast<float>(m_sourceWidth) - m_destRect.Width())/m_sourceWidth)*100;
         float scaleY = fabs((static_cast<float>(m_sourceHeight) - m_destRect.Height())/m_sourceHeight)*100;
-        int minScale = CServiceBroker::GetSettings()->GetInt(CSettings::SETTING_VIDEOPLAYER_HQSCALERS);
+        int minScale = CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_VIDEOPLAYER_HQSCALERS);
         if (scaleX < minScale && scaleY < minScale)
           return false;
         return true;
