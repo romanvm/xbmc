@@ -2817,8 +2817,8 @@ namespace XBMCAddon
                                          bool post = false,
                                          bool isgz = false,
                                          int season = -1);
-      static void InfoTagVideo::setAvailableFanartRaw(CVideoInfoTag* infoTag,
-                                                      const std::vector<Properties>& images);
+      static void setAvailableFanartRaw(CVideoInfoTag* infoTag,
+                                        const std::vector<Properties>& images);
 #endif
     };
   }
