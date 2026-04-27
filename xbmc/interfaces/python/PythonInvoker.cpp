@@ -168,8 +168,29 @@ bool CPythonInvoker::execute(const std::string& script, std::vector<std::wstring
       }
 
       PyEval_RestoreThread(m_mainThreadState);
+#if PY_VERSION_HEX >= 0x030C0000
+      PyInterpreterConfig interpConfig = {};
+      interpConfig.use_main_obmalloc = 0;
+      interpConfig.allow_fork = 1;
+      interpConfig.allow_exec = 1;
+      interpConfig.allow_threads = 1;
+      interpConfig.allow_daemon_threads = 1;
+      interpConfig.check_multi_interp_extensions = 1;
+      interpConfig.gil = PyInterpreterConfig_OWN_GIL;
+
+      PyStatus status = Py_NewInterpreterFromConfig(&l_threadState, &interpConfig);
+      if (PyStatus_Exception(status))
+      {
+        const char* errorMsg = status.err_msg ? status.err_msg : "unknown error";
+        CLog::Log(LOGERROR,
+                  "CPythonInvoker({}, {}): Py_NewInterpreterFromConfig failed: {}",
+                  GetId(), m_sourceFile, errorMsg);
+      }
+#else
       l_threadState = Py_NewInterpreter();
-      PyEval_ReleaseThread(l_threadState);
+#endif
+      if (l_threadState != nullptr)
+        PyEval_ReleaseThread(l_threadState);
       if (l_threadState == NULL)
       {
         CLog::Log(LOGERROR, "CPythonInvoker({}, {}): FAILED to get thread m_threadState!", GetId(),
