@@ -861,7 +861,7 @@ namespace PythonBindings
 
   // This is the call that will call all of the other initializes
   //  for all of the classes in this module
-  static void initTypes()
+  static int initTypes()
   {
     static bool typesAlreadyInitialized = false;
     if (!typesAlreadyInitialized)
@@ -874,19 +874,81 @@ namespace PythonBindings
 
       classNameAsVariables.each { %>
       if (PyType_Ready(&(Ty${it}_Type.pythonType)) < 0)
-        return;<%
+        return -1;<%
       }%>
     }
+
+    return 0;
   }
+
+  static int execModule_${module.@name}(PyObject* module)
+  {
+    if (initTypes() < 0)
+      return -1;
+
+<% classes.each { clazz -> %>
+    Py_INCREF(&(Ty${PythonTools.getClassNameAsVariable(clazz)}_Type.pythonType));
+    if (PyModule_AddObject(module, "${clazz.@sym_name}", (PyObject*)(&(Ty${PythonTools.getClassNameAsVariable(clazz)}_Type.pythonType))) < 0)
+    {
+      Py_DECREF(&(Ty${PythonTools.getClassNameAsVariable(clazz)}_Type.pythonType));
+      return -1;
+    }<%
+   }%>
+
+    // constants
+    if (PyModule_AddStringConstant(module, "__author__", "Team Kodi <http://kodi.tv>") < 0)
+      return -1;
+    if (PyModule_AddStringConstant(module, "__date__", CCompileInfo::GetBuildDate().c_str()) < 0)
+      return -1;
+    if (PyModule_AddStringConstant(module, "__version__", "3.0.2") < 0)
+      return -1;
+    if (PyModule_AddStringConstant(module, "__credits__", "Team Kodi") < 0)
+      return -1;
+    if (PyModule_AddStringConstant(module, "__platform__", "ALL") < 0)
+      return -1;
+
+    // need to handle constants
+    // #define constants
+<% module.depthFirst().findAll( { it.name() == 'constant'} ).each {
+     String pyCall =
+        (it.@type == 'int' || it.@type == 'long' || it.@type == 'unsigned int' || it.@type == 'unsigned long' || it.@type == 'bool') ?
+        'PyModule_AddIntConstant' : 'PyModule_AddStringConstant' %>
+    if (${pyCall}(module,"${it.@sym_name}",${it.@value}) < 0)
+      return -1;<%
+  } %>
+    // constexpr constants
+<% module.depthFirst().findAll( { it.name() == 'variable' && it.@storage && it.@storage == "constexpr" && !it.@error } ).each {
+     String pyCall =
+        ( it.@type == 'q(const).int' || it.@type == 'q(const).long' || it.@type == 'q(const).unsigned int' || it.@type == 'q(const).unsigned long' || it.@type == 'q(const).bool' ) ?
+        'PyModule_AddIntConstant' : 'PyModule_AddStringConstant' %>
+    if (${pyCall}(module,"${it.@sym_name}",${it.@value}) < 0)
+      return -1;<%
+  } %>
+
+    return 0;
+  }
+
+  static PyModuleDef_Slot createModuleSlots[] =
+  {
+    {Py_mod_exec, reinterpret_cast<void*>(execModule_${module.@name})},
+#if defined(Py_mod_multiple_interpreters)
+#if defined(Py_MOD_PER_INTERPRETER_GIL_SUPPORTED)
+    {Py_mod_multiple_interpreters, Py_MOD_PER_INTERPRETER_GIL_SUPPORTED},
+#elif defined(Py_MOD_MULTIPLE_INTERPRETERS_SUPPORTED)
+    {Py_mod_multiple_interpreters, Py_MOD_MULTIPLE_INTERPRETERS_SUPPORTED},
+#endif
+#endif
+    {0, nullptr}
+  };
 
   static struct PyModuleDef createModule
   {
       PyModuleDef_HEAD_INIT,
       "${module.@name}",
       "",
-      -1,
+      0,
       ${module.@name}_methods,
-      nullptr,
+      createModuleSlots,
       nullptr,
       nullptr,
       nullptr,
@@ -894,45 +956,7 @@ namespace PythonBindings
 
   PyObject *PyInit_Module_${module.@name}()
   {
-    initTypes();
-
-    // init general ${module.@name} modules
-    PyObject* module;
-
-<% classNameAsVariables.each { %>
-    Py_INCREF(&(Ty${it}_Type.pythonType));<%
-   }%>
-
-    module = PyModule_Create(&createModule);
-    if (module == NULL) return NULL;
-
-<% classes.each { clazz -> %>
-    PyModule_AddObject(module, "${clazz.@sym_name}", (PyObject*)(&(Ty${PythonTools.getClassNameAsVariable(clazz)}_Type.pythonType)));<%
-   }%>
-
-   // constants
-   PyModule_AddStringConstant(module, "__author__", "Team Kodi <http://kodi.tv>");
-   PyModule_AddStringConstant(module, "__date__", CCompileInfo::GetBuildDate().c_str());
-   PyModule_AddStringConstant(module, "__version__", "3.0.2");
-   PyModule_AddStringConstant(module, "__credits__", "Team Kodi");
-   PyModule_AddStringConstant(module, "__platform__", "ALL");
-
-   // need to handle constants
-   // #define constants
-<% module.depthFirst().findAll( { it.name() == 'constant'} ).each {
-     String pyCall =
-        (it.@type == 'int' || it.@type == 'long' || it.@type == 'unsigned int' || it.@type == 'unsigned long' || it.@type == 'bool') ?
-        'PyModule_AddIntConstant' : 'PyModule_AddStringConstant' %>
-   ${pyCall}(module,"${it.@sym_name}",${it.@value}); <%
-  } %>
-  // constexpr constants
-<% module.depthFirst().findAll( { it.name() == 'variable' && it.@storage && it.@storage == "constexpr" && !it.@error } ).each {
-     String pyCall =
-        ( it.@type == 'q(const).int' || it.@type == 'q(const).long' || it.@type == 'q(const).unsigned int' || it.@type == 'q(const).unsigned long' || it.@type == 'q(const).bool' ) ?
-        'PyModule_AddIntConstant' : 'PyModule_AddStringConstant' %>
-   ${pyCall}(module,"${it.@sym_name}",${it.@value}); <%
-  } %>
-  return module;
+    return PyModuleDef_Init(&createModule);
   }
 
 } // end PythonBindings namespace for python type definitions
