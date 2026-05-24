@@ -42,6 +42,7 @@
   <addon>resource.uisounds.kodi</addon>
   <addon>screensaver.xbmc.builtin.black</addon>
   <addon>screensaver.xbmc.builtin.dim</addon>
+  <addon>script.module.lxml</addon>
   <addon>script.module.pil</addon>
   <addon>script.module.pycryptodome</addon>
   <addon>skin.estuary</addon>

@@ -268,3 +268,6 @@ exclude_dll.txt
 
 # clangd index
 .cache/
+
+# tokensave database
+.tokensave/

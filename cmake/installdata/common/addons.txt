@@ -29,6 +29,7 @@ addons/resource.language.en_gb/*
 addons/resource.uisounds.kodi/*
 addons/screensaver.xbmc.builtin.black/*
 addons/screensaver.xbmc.builtin.dim/*
+addons/script.module.lxml/*
 addons/script.module.pil/*
 addons/script.module.pycryptodome/*
 addons/service.xbmc.versioncheck/*

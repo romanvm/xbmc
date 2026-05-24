@@ -143,7 +143,7 @@ sudo apt install autoconf automake autopoint autotools-dev cmake \
   libtinyxml2-dev libtool libudev-dev libunistring-dev libva-dev \
   libvdpau-dev libvorbis-dev libxmu-dev libxrandr-dev libxslt1-dev \
   libxt-dev lsb-release meson nasm ninja-build nlohmann-json3-dev \
-  python3-dev python3-pil python3-pip swig unzip uuid-dev zip \
+  python3-dev python3-lxml python3-pil python3-pip swig unzip uuid-dev zip \
   zlib1g-dev
 ```
 
