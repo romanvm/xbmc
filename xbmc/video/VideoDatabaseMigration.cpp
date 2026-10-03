@@ -1428,9 +1428,12 @@ void CVideoDatabase::UpdateTables(int iVersion)
 
   if (iVersion < 149)
     m_pDS->exec("ALTER TABLE streamdetails ADD iFlags INTEGER DEFAULT 0");
+
+  if (iVersion < 150)
+    m_pDS->exec("ALTER TABLE actor ADD birth_date TEXT");
 }
 
 int CVideoDatabase::GetSchemaVersion() const
 {
-  return 149;
+  return 150;
 }

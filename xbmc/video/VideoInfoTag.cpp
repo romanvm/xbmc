@@ -56,6 +56,16 @@ StreamFlags ParseStreamFlags(const TiXmlNode* nodeDetail)
 }
 } // unnamed namespace
 
+void SActorInfo::SetBirthDate(std::string_view date)
+{
+  std::string trimmed{date};
+  StringUtils::Trim(trimmed);
+  CDateTime dateTime;
+  // SetFromDBDate() also accepts malformed input, so only keep dates that survive a round trip
+  birthDate = dateTime.SetFromDBDate(trimmed) && dateTime.GetAsDBDate() == trimmed ? trimmed
+                                                                                   : std::string{};
+}
+
 void CVideoInfoTag::Reset()
 {
   m_director.clear();
@@ -346,6 +356,8 @@ bool CVideoInfoTag::Save(TiXmlNode *node, const std::string &tag, bool savePathI
     XMLUtils::SetString(actornode, "name", it->strName);
     XMLUtils::SetString(actornode, "role", it->strRole);
     XMLUtils::SetInt(actornode, "order", it->order);
+    if (!it->birthDate.empty())
+      XMLUtils::SetString(actornode, "birthdate", it->birthDate);
     XMLUtils::SetString(actornode, "thumb", it->thumbUrl.GetFirstUrlByType().m_url);
   }
   XMLUtils::SetStringArray(movie, "artist", m_artist);
@@ -593,6 +605,7 @@ void CVideoInfoTag::Archive(CArchive& ar)
       ar << castEntry.strName;
       ar << castEntry.strRole;
       ar << castEntry.order;
+      ar << castEntry.birthDate;
       ar << castEntry.thumb;
       ar << castEntry.thumbUrl.GetData();
     }
@@ -697,6 +710,7 @@ void CVideoInfoTag::Archive(CArchive& ar)
       ar >> info.strName;
       ar >> info.strRole;
       ar >> info.order;
+      ar >> info.birthDate;
       ar >> info.thumb;
       std::string strXml;
       ar >> strXml;
@@ -822,6 +836,8 @@ void CVideoInfoTag::Serialize(CVariant& value) const
     actor["name"] = person.strName;
     actor["role"] = person.strRole;
     actor["order"] = person.order;
+    if (!person.birthDate.empty())
+      actor["birthdate"] = person.birthDate;
     if (!person.thumb.empty())
       actor["thumbnail"] = IMAGE_FILES::URLFromFile(person.thumb);
     value["cast"].push_back(std::move(actor));
@@ -1502,6 +1518,8 @@ void CVideoInfoTag::ParseNative(const TiXmlElement* movie, bool prioritise)
         info.strRole = StringUtils::Trim(value);
 
       XMLUtils::GetInt(node, "order", info.order);
+      if (XMLUtils::GetString(node, "birthdate", value))
+        info.SetBirthDate(value);
       const TiXmlElement* thumbnode = node->FirstChildElement("thumb");
       while (thumbnode)
       {

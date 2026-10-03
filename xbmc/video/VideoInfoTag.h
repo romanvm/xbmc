@@ -39,6 +39,13 @@ struct SActorInfo
   CScraperUrl thumbUrl;
   std::string thumb;
   int order{-1};
+  std::string birthDate; //!< YYYY-MM-DD, empty if unknown
+
+  /*!
+   * \brief Set the birth date.
+   * \param date YYYY-MM-DD. Any other or empty input clears the birth date.
+   */
+  void SetBirthDate(std::string_view date);
 };
 
 class CRating

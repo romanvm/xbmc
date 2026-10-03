@@ -242,7 +242,7 @@ bool CGUIDialogVideoInfo::OnMessage(CGUIMessage& message)
             Open();
           }
           else
-            OnSearch(strItem);
+            OnSearch(strItem, m_castList->Get(iItem)->GetProperty("birthdate").asString());
         }
       }
     }
@@ -396,6 +396,8 @@ void CGUIDialogVideoInfo::SetMovie(const CFileItem *item)
         item->SetArt("icon", "DefaultActor.png");
         item->SetLabel(it->strName);
         item->SetLabel2(it->strRole);
+        if (!it->birthDate.empty())
+          item->SetProperty("birthdate", it->birthDate);
         m_castList->Add(item);
       }
     }
@@ -439,6 +441,8 @@ void CGUIDialogVideoInfo::SetMovie(const CFileItem *item)
       item->SetArt("icon", "DefaultActor.png");
       item->SetLabel(it->strName);
       item->SetLabel2(it->strRole);
+      if (!it->birthDate.empty())
+        item->SetProperty("birthdate", it->birthDate);
       m_castList->Add(item);
     }
   }
@@ -562,7 +566,7 @@ bool CGUIDialogVideoInfo::RefreshAll() const
   return m_bRefreshAll;
 }
 
-void CGUIDialogVideoInfo::OnSearch(std::string& strSearch)
+void CGUIDialogVideoInfo::OnSearch(std::string& strSearch, const std::string& birthDate)
 {
   CGUIDialogProgress *progress = CServiceBroker::GetGUI()->GetWindowManager().GetWindow<CGUIDialogProgress>(WINDOW_DIALOG_PROGRESS);
   if (progress)
@@ -575,7 +579,7 @@ void CGUIDialogVideoInfo::OnSearch(std::string& strSearch)
     progress->Progress();
   }
   CFileItemList items;
-  DoSearch(strSearch, items);
+  DoSearch(strSearch, items, birthDate);
 
   if (progress)
     progress->Close();
@@ -616,14 +620,16 @@ void CGUIDialogVideoInfo::OnSearch(std::string& strSearch)
   }
 }
 
-void CGUIDialogVideoInfo::DoSearch(std::string& strSearch, CFileItemList& items) const
+void CGUIDialogVideoInfo::DoSearch(std::string& strSearch,
+                                   CFileItemList& items,
+                                   const std::string& birthDate) const
 {
   CVideoDatabase db;
   if (!db.Open())
     return;
 
   CFileItemList movies;
-  db.GetMoviesByActor(strSearch, movies);
+  db.GetMoviesByActor(strSearch, movies, birthDate);
   for (int i = 0; i < movies.Size(); ++i)
   {
     std::string label = movies[i]->GetVideoInfoTag()->m_strTitle;
@@ -635,7 +641,7 @@ void CGUIDialogVideoInfo::DoSearch(std::string& strSearch, CFileItemList& items)
       movies, "[" + CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(20338) + "] ",
       items);
 
-  db.GetTvShowsByActor(strSearch, movies);
+  db.GetTvShowsByActor(strSearch, movies, birthDate);
   for (int i = 0; i < movies.Size(); ++i)
   {
     std::string label = movies[i]->GetVideoInfoTag()->m_strShowTitle;
@@ -647,7 +653,7 @@ void CGUIDialogVideoInfo::DoSearch(std::string& strSearch, CFileItemList& items)
       movies, "[" + CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(20364) + "] ",
       items);
 
-  db.GetEpisodesByActor(strSearch, movies);
+  db.GetEpisodesByActor(strSearch, movies, birthDate);
   for (int i = 0; i < movies.Size(); ++i)
   {
     std::string label = movies[i]->GetVideoInfoTag()->m_strTitle + " (" +  movies[i]->GetVideoInfoTag()->m_strShowTitle + ")";
